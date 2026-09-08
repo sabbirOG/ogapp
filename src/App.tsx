@@ -101,6 +101,7 @@ function App() {
 
   useEffect(() => {
     const checkReminders = () => {
+      if (document.visibilityState !== 'visible') return
       if (!('Notification' in window) || Notification.permission !== 'granted') return
       const now = new Date()
       tasks.forEach((task) => {
@@ -127,8 +128,13 @@ function App() {
       })
     }
     checkReminders()
-    const timer = window.setInterval(checkReminders, 30000)
-    return () => window.clearInterval(timer)
+    const timer = window.setInterval(checkReminders, 60000)
+    const resume = () => { if (document.visibilityState === 'visible') checkReminders() }
+    document.addEventListener('visibilitychange', resume)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', resume)
+    }
   }, [tasks])
 
   const addTask = (event: FormEvent<HTMLFormElement>) => {
