@@ -109,6 +109,16 @@ function prayerDate(value: string) {
   return date
 }
 
+async function showAppNotification(title: string, options: NotificationOptions) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined
+  if (registration) {
+    await registration.showNotification(title, options)
+    return
+  }
+  new Notification(title, options)
+}
+
 function App() {
   const [active, setActive] = useState('Today')
   const [tasks, setTasks] = useStored<Task[]>('tasks', empty.tasks)
@@ -217,22 +227,14 @@ function App() {
       tasks.forEach((task) => {
         const reminderKey = `${task.id}-${localDateKey(now)}`
         if (!task.done && isDueThisMinute(task, now) && !reminded.current.has(reminderKey)) {
-          const showReminder = async () => {
-            const registration = await navigator.serviceWorker?.ready
-            if (registration) {
-              await registration.showNotification(notificationName ? `OGApp reminder for ${notificationName}` : 'OGApp reminder', {
-                body: notificationName ? `${notificationName}, ${task.title}` : task.title,
-                icon: '/ogapp-icon.svg',
-                badge: '/ogapp-icon.svg',
-                tag: `task-${task.id}`,
-                data: { url: `${window.location.origin}/` },
-              })
-            } else {
-              new Notification(notificationName ? `OGApp reminder for ${notificationName}` : 'OGApp reminder', { body: notificationName ? `${notificationName}, ${task.title}` : task.title, tag: `task-${task.id}` })
-            }
-          }
-          void showReminder()
-          reminded.current.add(reminderKey)
+        void showAppNotification(notificationName ? `OGApp reminder for ${notificationName}` : 'OGApp reminder', {
+          body: notificationName ? `${notificationName}, ${task.title}` : task.title,
+          icon: '/ogapp-icon.svg',
+          badge: '/ogapp-icon.svg',
+          tag: `task-${task.id}`,
+          data: { url: `${window.location.origin}/` },
+        })
+        reminded.current.add(reminderKey)
         }
       })
       if (prayers?.date === localDateKey(now)) {
@@ -241,12 +243,13 @@ function App() {
           const due = time ? prayerDate(time) : null
           const reminderKey = `prayer-${name}-${localDateKey(now)}`
           if (due && due.getHours() === now.getHours() && due.getMinutes() === now.getMinutes() && !reminded.current.has(reminderKey)) {
-            const showPrayer = async () => {
-              const registration = await navigator.serviceWorker?.ready
-              if (registration) await registration.showNotification(notificationName ? `${name} prayer time for ${notificationName}` : `${name} prayer time`, { body: notificationName ? `${notificationName}, it is time for ${name} prayer in Dhaka.` : `It is time for ${name} prayer in Dhaka.`, icon: '/ogapp-icon.svg', badge: '/ogapp-icon.svg', tag: reminderKey, data: { url: `${window.location.origin}/` } })
-              else new Notification(notificationName ? `${name} prayer time for ${notificationName}` : `${name} prayer time`, { body: notificationName ? `${notificationName}, it is time for ${name} prayer in Dhaka.` : `It is time for ${name} prayer in Dhaka.` })
-            }
-            void showPrayer()
+            void showAppNotification(notificationName ? `${name} prayer time for ${notificationName}` : `${name} prayer time`, {
+              body: notificationName ? `${notificationName}, it is time for ${name} prayer in Dhaka.` : `It is time for ${name} prayer in Dhaka.`,
+              icon: '/ogapp-icon.svg',
+              badge: '/ogapp-icon.svg',
+              tag: reminderKey,
+              data: { url: `${window.location.origin}/` },
+            })
             reminded.current.add(reminderKey)
           }
         })
@@ -276,7 +279,7 @@ function App() {
       setReports([{ id: date, date, text }, ...reports].slice(0, 90))
       reported.current.add(date)
       if ('Notification' in window && Notification.permission === 'granted') {
-        void navigator.serviceWorker?.ready.then((registration) => registration.showNotification(notificationName ? `Daily report for ${notificationName}` : 'OGApp daily report', { body: text, icon: '/ogapp-icon.svg', badge: '/ogapp-icon.svg', tag: `daily-report-${date}`, data: { url: `${window.location.origin}/` } }))
+        void showAppNotification(notificationName ? `Daily report for ${notificationName}` : 'OGApp daily report', { body: text, icon: '/ogapp-icon.svg', badge: '/ogapp-icon.svg', tag: `daily-report-${date}`, data: { url: `${window.location.origin}/` } })
       }
     }
     checkDailyReport()
