@@ -24,5 +24,6 @@ export const StepCounter = registerPlugin<StepCounterPlugin>('StepCounter', {
     requestPermission: async () => ({ granted: false }),
     startTracking: async () => ({ available: false, authorized: false, steps: 0, date: '', goal: 10000, tracking: false }),
     stopTracking: async () => undefined,
+    addListener: async () => ({ remove: async () => undefined }),
   }),
 })
