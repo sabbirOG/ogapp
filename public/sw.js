@@ -1,4 +1,4 @@
-const CACHE = 'ogapp-v2'
+const CACHE = 'ogapp-v3'
 
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
@@ -7,7 +7,7 @@ self.addEventListener('message', event => {
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
-      .then(cache => cache.addAll(['/', '/index.html', '/icon-192.svg']))
+      .then(cache => cache.addAll(['/', '/index.html', '/ogapp-icon.svg']))
       .then(() => self.skipWaiting()),
   )
 })

@@ -120,8 +120,8 @@ function App() {
             if (registration) {
               await registration.showNotification('OGApp reminder', {
                 body: task.title,
-                icon: '/icon-192.svg',
-                badge: '/icon-192.svg',
+                icon: '/ogapp-icon.svg',
+                badge: '/ogapp-icon.svg',
                 tag: `task-${task.id}`,
                 data: { url: `${window.location.origin}/` },
               })
@@ -236,12 +236,12 @@ function App() {
   return <div className="app-shell">
     {updateAvailable && <div className="update-banner" role="status"><span>A new OGApp version is ready.</span><button onClick={applyUpdate}>Update now</button></div>}
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">OG</div><span>OG<span>App</span></span></div>
+      <div className="brand"><img className="brand-mark" src="/ogapp-icon.svg" alt="OGApp" /><span>OG<span>App</span></span></div>
       <nav>{navItems.map((item) => <button className={active === item.label ? 'nav-item active' : 'nav-item'} key={item.label} onClick={() => setActive(item.label)}><span className="nav-icon"><Icon name={item.icon} /></span>{item.label}</button>)}</nav>
       <div className="sidebar-bottom"><div className="privacy"><span className="privacy-dot" /><div><b>Your data is private</b><small>Stored only on this device</small></div></div><button className="settings" onClick={() => setShowSettings(true)}><span>Settings</span></button></div>
     </aside>
     <main className="main-content">
-      <header className="topbar"><button className="mobile-brand" onClick={() => setActive('Today')}><b>OGApp</b></button><div className="breadcrumb"><span>OGApp</span><b>/</b><strong>{active}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Search" onClick={() => setShowSearch(!showSearch)}>Search</button><button className="avatar" onClick={() => setShowSettings(true)}>{settings.name.slice(0, 1).toUpperCase() || 'OG'}</button></div></header>
+      <header className="topbar"><button className="mobile-brand" onClick={() => setActive('Today')}><img src="/ogapp-icon.svg" alt="" /><b>OGApp</b></button><div className="breadcrumb"><span>OGApp</span><b>/</b><strong>{active}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Search" onClick={() => setShowSearch(!showSearch)}>Search</button><button className="avatar" onClick={() => setShowSettings(true)}>{settings.name.slice(0, 1).toUpperCase() || 'OG'}</button></div></header>
       {showSearch && <div className="search-bar"><input autoFocus placeholder="Search tasks..." value={search} onChange={(event) => setSearch(event.target.value)} /><button onClick={() => { setSearch(''); setShowSearch(false) }}>Close</button></div>}
       {active === 'Today' ? <Today tasks={filteredTasks} habits={habits} expenses={expenses} completed={completed} spent={spent} currency={currency} name={displayName} dateLabel={dateLabel} command={command} setCommand={setCommand} onCommand={runCommand} onTask={(id) => setTasks(tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task))} onHabit={(id) => setHabits(habits.map((habit) => habit.id === id ? { ...habit, completedToday: !habit.completedToday, streak: habit.completedToday ? Math.max(0, habit.streak - 1) : habit.streak + 1 } : habit))} onAdd={(type) => setForm(type)} onNavigate={setActive} onDelete={remove} /> : <Section active={active} tasks={filteredTasks} habits={habits} expenses={expenses} notes={notes} goals={goals} currency={currency} onAdd={(type) => setForm(type)} onTask={(id) => setTasks(tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task))} onHabit={(id) => setHabits(habits.map((habit) => habit.id === id ? { ...habit, completedToday: !habit.completedToday, streak: habit.completedToday ? Math.max(0, habit.streak - 1) : habit.streak + 1 } : habit))} onGoal={(id, current) => setGoals(goals.map((goal) => goal.id === id ? { ...goal, current } : goal))} onDelete={remove} />}
     </main>
