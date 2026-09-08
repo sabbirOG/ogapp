@@ -49,3 +49,5 @@
 .expense-icon .icon,.goal-icon .icon{width:15px;height:15px}
 .bottom-nav-item span{display:grid;place-items:center}
 .bottom-nav-item .icon{width:14px;height:14px}
+.command-card{display:grid;grid-template-columns:1fr minmax(280px, .8fr);gap:24px;align-items:center;background:#111;color:#fff;border-radius:10px;padding:22px 24px;margin-bottom:18px}.command-card .eyebrow{color:#999}.command-card h2{font-size:18px;margin:0 0 6px;letter-spacing:-.4px}.command-card p:not(.eyebrow){color:#aaa;font-size:12px;margin:0}.command-input{display:flex;background:#fff;border:1px solid #333;border-radius:7px;padding:4px}.command-input input{border:0;outline:0;min-width:0;flex:1;padding:9px;color:#111}.command-input button{border:0;background:#000;color:#fff;border-radius:4px;padding:0 15px;font-weight:600}.settings-note{font-size:11px;color:#888;line-height:1.5;margin:18px 0 0}
+@media(max-width:600px){.command-card{grid-template-columns:1fr;gap:16px;padding:18px}.command-input{width:100%}}
