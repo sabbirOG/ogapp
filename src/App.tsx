@@ -236,7 +236,7 @@ function App() {
   return <div className="app-shell">
     {updateAvailable && <div className="update-banner" role="status"><span>A new OGApp version is ready.</span><button onClick={applyUpdate}>Update now</button></div>}
     <aside className="sidebar">
-      <div className="brand"><img className="brand-mark" src="/ogapp-icon.svg" alt="OGApp" /><span>OG<span>App</span></span></div>
+      <div className="brand"><span>OG<span>App</span></span></div>
       <nav>{navItems.map((item) => <button className={active === item.label ? 'nav-item active' : 'nav-item'} key={item.label} onClick={() => setActive(item.label)}><span className="nav-icon"><Icon name={item.icon} /></span>{item.label}</button>)}</nav>
       <div className="sidebar-bottom"><div className="privacy"><span className="privacy-dot" /><div><b>Your data is private</b><small>Stored only on this device</small></div></div><button className="settings" onClick={() => setShowSettings(true)}><span>Settings</span></button></div>
     </aside>
