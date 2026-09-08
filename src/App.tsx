@@ -52,6 +52,19 @@ function useStored<T>(key: string, initial: T) {
   return [value, setValue] as const
 }
 
+function reminderDate(due: string, now: Date) {
+  const match = due.match(/\b(0?[1-9]|1[0-2])(?::([0-5]\d))?\s*(am|pm)\b|\b([01]\d|2[0-3]):([0-5]\d)\b/i)
+  if (!match) return null
+  const hour12 = match[1] ? Number(match[1]) : null
+  const minute = Number(match[2] ?? match[5] ?? 0)
+  const meridiem = match[3]?.toLowerCase()
+  const hour = hour12 === null ? Number(match[4]) : (hour12 % 12) + (meridiem === 'pm' ? 12 : 0)
+  const date = new Date(now)
+  if (/\btomorrow\b/i.test(due)) date.setDate(date.getDate() + 1)
+  date.setHours(hour, minute, 0, 0)
+  return date
+}
+
 function App() {
   const [active, setActive] = useState('Today')
   const [tasks, setTasks] = useStored<Task[]>('tasks', empty.tasks)
@@ -90,10 +103,10 @@ function App() {
     const checkReminders = () => {
       if (!('Notification' in window) || Notification.permission !== 'granted') return
       const now = new Date()
-      const current = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
       tasks.forEach((task) => {
-        const time = task.due.match(/\b([01]\d|2[0-3]):([0-5]\d)\b/)?.[0]
-        if (!task.done && time === current && !reminded.current.has(task.id)) {
+        const due = reminderDate(task.due, now)
+        const sameMinute = due && due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate() && due.getHours() === now.getHours() && due.getMinutes() === now.getMinutes()
+        if (!task.done && sameMinute && !reminded.current.has(task.id)) {
           const showReminder = async () => {
             const registration = await navigator.serviceWorker?.ready
             if (registration) {
@@ -190,7 +203,8 @@ function App() {
       const title = text.replace(/^goal\s+/i, '').trim()
       if (title) setGoals([...goals, { id: Date.now(), title, description: '', target: 1, current: 0, deadline: '' }])
     } else {
-      setTasks([...tasks, { id: Date.now(), title: text, due: 'Anytime', tag: 'Personal', done: false }])
+      const due = /\btomorrow\b/i.test(text) ? 'Tomorrow' : /\btoday\b/i.test(text) ? 'Today' : 'Anytime'
+      setTasks([...tasks, { id: Date.now(), title: text, due, tag: 'Personal', done: false }])
     }
     setCommand('')
     notify('Command completed')
