@@ -79,6 +79,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [form, setForm] = useState<string | null>(null)
   const [command, setCommand] = useState('')
+  const [updateAvailable, setUpdateAvailable] = useState(false)
   const [notifications, setNotifications] = useState(() => 'Notification' in window && Notification.permission === 'granted')
   const reminded = useRef(new Set<number>())
 
@@ -97,6 +98,12 @@ function App() {
       window.removeEventListener('focus', syncPermission)
       document.removeEventListener('visibilitychange', syncPermission)
     }
+  }, [])
+
+  useEffect(() => {
+    const showUpdate = () => setUpdateAvailable(true)
+    window.addEventListener('ogapp-update-available', showUpdate)
+    return () => window.removeEventListener('ogapp-update-available', showUpdate)
   }, [])
 
   useEffect(() => {
@@ -221,8 +228,13 @@ function App() {
     setNotifications(permission === 'granted')
     notify(permission === 'granted' ? 'Notifications enabled' : 'Notification permission was not granted')
   }
+  const applyUpdate = () => {
+    navigator.serviceWorker?.controller?.postMessage({ type: 'SKIP_WAITING' })
+    window.location.reload()
+  }
 
   return <div className="app-shell">
+    {updateAvailable && <div className="update-banner" role="status"><span>A new OGApp version is ready.</span><button onClick={applyUpdate}>Update now</button></div>}
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">OG</div><span>OG<span>App</span></span></div>
       <nav>{navItems.map((item) => <button className={active === item.label ? 'nav-item active' : 'nav-item'} key={item.label} onClick={() => setActive(item.label)}><span className="nav-icon"><Icon name={item.icon} /></span>{item.label}</button>)}</nav>
