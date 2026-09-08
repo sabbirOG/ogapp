@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import './App.css'
 
-type Task = { id: number; title: string; due: string; tag: string; done: boolean }
+type Recurrence = 'daily' | 'weekly' | ''
+type Task = { id: number; title: string; due: string; tag: string; done: boolean; recurrence?: Recurrence }
 type Habit = { id: number; name: string; icon: string; color: string; streak: number; completedToday: boolean }
 type Expense = { id: number; title: string; category: string; amount: number; date: string }
 type Note = { id: number; title: string; body: string; color: string; updatedAt: string }
@@ -65,6 +66,16 @@ function reminderDate(due: string, now: Date) {
   return date
 }
 
+function isDueThisMinute(task: Task, now: Date) {
+  const due = reminderDate(task.due, now)
+  if (!due) return false
+  const sameTime = due.getHours() === now.getHours() && due.getMinutes() === now.getMinutes()
+  if (!sameTime) return false
+  if (task.recurrence === 'daily') return true
+  if (task.recurrence === 'weekly') return due.getDay() === now.getDay()
+  return due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate()
+}
+
 function App() {
   const [active, setActive] = useState('Today')
   const [tasks, setTasks] = useStored<Task[]>('tasks', empty.tasks)
@@ -81,7 +92,7 @@ function App() {
   const [command, setCommand] = useState('')
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [notifications, setNotifications] = useState(() => 'Notification' in window && Notification.permission === 'granted')
-  const reminded = useRef(new Set<number>())
+  const reminded = useRef(new Set<string>())
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2400) }
   const completed = tasks.filter((task) => task.done).length
@@ -112,9 +123,8 @@ function App() {
       if (!('Notification' in window) || Notification.permission !== 'granted') return
       const now = new Date()
       tasks.forEach((task) => {
-        const due = reminderDate(task.due, now)
-        const sameMinute = due && due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate() && due.getHours() === now.getHours() && due.getMinutes() === now.getMinutes()
-        if (!task.done && sameMinute && !reminded.current.has(task.id)) {
+        const reminderKey = `${task.id}-${now.toISOString().slice(0, 10)}`
+        if (!task.done && isDueThisMinute(task, now) && !reminded.current.has(reminderKey)) {
           const showReminder = async () => {
             const registration = await navigator.serviceWorker?.ready
             if (registration) {
@@ -130,7 +140,7 @@ function App() {
             }
           }
           void showReminder()
-          reminded.current.add(task.id)
+          reminded.current.add(reminderKey)
         }
       })
     }
@@ -149,7 +159,7 @@ function App() {
     const data = new FormData(event.currentTarget)
     const title = String(data.get('title') || '').trim()
     if (!title) return
-    setTasks([...tasks, { id: Date.now(), title, due: String(data.get('due') || 'Anytime'), tag: String(data.get('tag') || 'Personal'), done: false }])
+    setTasks([...tasks, { id: Date.now(), title, due: String(data.get('due') || 'Anytime'), tag: String(data.get('tag') || 'Personal'), recurrence: String(data.get('recurrence') || '') as Recurrence, done: false }])
     setForm(null); notify('Task created')
   }
   const addHabit = (event: FormEvent<HTMLFormElement>) => {
@@ -216,8 +226,12 @@ function App() {
       const title = text.replace(/^goal\s+/i, '').trim()
       if (title) setGoals([...goals, { id: Date.now(), title, description: '', target: 1, current: 0, deadline: '' }])
     } else {
-      const due = /\btomorrow\b/i.test(text) ? 'Tomorrow' : /\btoday\b/i.test(text) ? 'Today' : 'Anytime'
-      setTasks([...tasks, { id: Date.now(), title: text, due, tag: 'Personal', done: false }])
+      const recurrence: Recurrence = /\b(daily|every day)\b/i.test(text) ? 'daily' : /\b(weekly|every week)\b/i.test(text) ? 'weekly' : ''
+      const cleaned = text.replace(/\b(every day|daily|every week|weekly)\b/ig, '').trim()
+      const time = cleaned.match(/\b(0?[1-9]|1[0-2])(?::[0-5]\d)?\s*(am|pm)\b|\b([01]\d|2[0-3]):[0-5]\d\b/i)?.[0]
+      const due = time || (/\btomorrow\b/i.test(cleaned) ? 'Tomorrow' : /\btoday\b/i.test(cleaned) ? 'Today' : 'Anytime')
+      const title = cleaned.replace(/\bat\s+(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|(?:[01]\d|2[0-3]):[0-5]\d)\b/i, '').trim()
+      setTasks([...tasks, { id: Date.now(), title, due, recurrence, tag: 'Personal', done: false }])
     }
     setCommand('')
     notify('Command completed')
@@ -245,7 +259,7 @@ function App() {
       {showSearch && <div className="search-bar"><input autoFocus placeholder="Search tasks..." value={search} onChange={(event) => setSearch(event.target.value)} /><button onClick={() => { setSearch(''); setShowSearch(false) }}>Close</button></div>}
       {active === 'Today' ? <Today tasks={filteredTasks} habits={habits} expenses={expenses} completed={completed} spent={spent} currency={currency} name={displayName} dateLabel={dateLabel} command={command} setCommand={setCommand} onCommand={runCommand} onTask={(id) => setTasks(tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task))} onHabit={(id) => setHabits(habits.map((habit) => habit.id === id ? { ...habit, completedToday: !habit.completedToday, streak: habit.completedToday ? Math.max(0, habit.streak - 1) : habit.streak + 1 } : habit))} onAdd={(type) => setForm(type)} onNavigate={setActive} onDelete={remove} /> : <Section active={active} tasks={filteredTasks} habits={habits} expenses={expenses} notes={notes} goals={goals} currency={currency} onAdd={(type) => setForm(type)} onTask={(id) => setTasks(tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task))} onHabit={(id) => setHabits(habits.map((habit) => habit.id === id ? { ...habit, completedToday: !habit.completedToday, streak: habit.completedToday ? Math.max(0, habit.streak - 1) : habit.streak + 1 } : habit))} onGoal={(id, current) => setGoals(goals.map((goal) => goal.id === id ? { ...goal, current } : goal))} onDelete={remove} />}
     </main>
-    {form && <Modal title={`Add ${form}`} onClose={() => setForm(null)}>{form === 'task' && <ItemForm onSubmit={addTask} fields={[['title', 'Task title', 'text'], ['due', 'When? (e.g. 9:00 AM)', 'text'], ['tag', 'Category', 'text']]} />}{form === 'habit' && <ItemForm onSubmit={addHabit} fields={[['name', 'Habit name', 'text']]} />}{form === 'expense' && <ItemForm onSubmit={addExpense} fields={[['title', 'What did you spend on?', 'text'], ['amount', 'Amount', 'number'], ['category', 'Category', 'text'], ['date', 'Date', 'date']]} />}{form === 'note' && <ItemForm onSubmit={addNote} fields={[['title', 'Note title', 'text'], ['body', 'Write your note...', 'textarea'], ['color', 'Color: yellow, pink, or blue', 'text']]} />}{form === 'goal' && <ItemForm onSubmit={addGoal} fields={[['title', 'Goal title', 'text'], ['description', 'Why does it matter?', 'textarea'], ['target', 'Number of milestones', 'number'], ['deadline', 'Target date', 'date']]} />}</Modal>}
+    {form && <Modal title={`Add ${form}`} onClose={() => setForm(null)}>{form === 'task' && <ItemForm onSubmit={addTask} fields={[['title', 'Task title', 'text'], ['due', 'When? (e.g. 9:00 AM)', 'text'], ['recurrence', 'Repeat: daily, weekly, or blank', 'text'], ['tag', 'Category', 'text']]} />}{form === 'habit' && <ItemForm onSubmit={addHabit} fields={[['name', 'Habit name', 'text']]} />}{form === 'expense' && <ItemForm onSubmit={addExpense} fields={[['title', 'What did you spend on?', 'text'], ['amount', 'Amount', 'number'], ['category', 'Category', 'text'], ['date', 'Date', 'date']]} />}{form === 'note' && <ItemForm onSubmit={addNote} fields={[['title', 'Note title', 'text'], ['body', 'Write your note...', 'textarea'], ['color', 'Color: yellow, pink, or blue', 'text']]} />}{form === 'goal' && <ItemForm onSubmit={addGoal} fields={[['title', 'Goal title', 'text'], ['description', 'Why does it matter?', 'textarea'], ['target', 'Number of milestones', 'number'], ['deadline', 'Target date', 'date']]} />}</Modal>}
     {showSettings && <Modal title="Settings" onClose={() => setShowSettings(false)}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); setSettings({ name: String(data.get('name') || ''), currency: String(data.get('currency') || 'USD') }); setShowSettings(false); notify('Settings saved') }}><label>Your name<input name="name" defaultValue={settings.name} placeholder="How should OG greet you?" /></label><label>Currency<select name="currency" defaultValue={settings.currency}><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option><option value="GBP">GBP (£)</option></select></label><button className="primary-button">Save settings</button></form><div className="settings-actions"><button onClick={enableNotifications}>{notifications ? 'Notifications enabled' : 'Enable notifications'}</button><button onClick={exportData}>Export my data</button><button className="danger-button" onClick={resetData}>Delete all data</button></div><p className="settings-note">Browser notifications work after permission is granted. Scheduled delivery depends on the browser and device; reliable background push requires a server.</p></Modal>}
     <BottomNav active={active} onChange={setActive} />
     {toast && <div className="toast">{toast}</div>}
@@ -253,7 +267,7 @@ function App() {
 }
 
 function Today({ tasks, habits, expenses, completed, spent, currency, name, dateLabel, command, setCommand, onCommand, onTask, onHabit, onAdd, onNavigate, onDelete }: { tasks: Task[]; habits: Habit[]; expenses: Expense[]; completed: number; spent: number; currency: string; name: string; dateLabel: string; command: string; setCommand: (value: string) => void; onCommand: () => void; onTask: (id: number) => void; onHabit: (id: number) => void; onAdd: (type: string) => void; onNavigate: (page: string) => void; onDelete: (type: string, id: number) => void }) {
-  return <div className="page"><section className="welcome"><div><p className="eyebrow">{dateLabel}</p><h1>Good morning, {name}</h1><p className="subtitle">Your private workspace for making today count.</p></div><div className="progress-ring" style={{ background: `conic-gradient(#000 0 ${tasks.length ? completed / tasks.length * 100 : 0}%, #e5e5e5 0)` }}><div><strong>{tasks.length ? Math.round(completed / tasks.length * 100) : 0}%</strong><small>day done</small></div></div></section><section className="command-card"><div><h2>Tell OG what to do</h2></div><div className="command-input"><input value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onCommand() }} placeholder="What should I organize?" /><button onClick={onCommand}>Run</button></div></section><div className="dashboard-grid"><section className="card"><Heading label="YOUR DAY" title={`Tasks ${completed}/${tasks.length}`} action="+ Add task" onAction={() => onAdd('task')} />{tasks.length ? <div className="task-list">{tasks.slice(0, 5).map((task) => <Row key={task.id} done={task.done} onClick={() => onTask(task.id)} onDelete={() => onDelete('task', task.id)} title={task.title} detail={`${task.due} · ${task.tag}`} />)}</div> : <Empty text="No tasks yet. Add the first one." onAdd={() => onAdd('task')} label="Add a task" />}<button className="view-all" onClick={() => onNavigate('Tasks')}>View all tasks <span>→</span></button></section><section className="card"><Heading label="KEEP GOING" title={`Habits ${habits.filter((habit) => habit.completedToday).length}/${habits.length}`} action="+ Add habit" onAction={() => onAdd('habit')} />{habits.length ? <div className="habit-list">{habits.slice(0, 5).map((habit) => <Row key={habit.id} done={habit.completedToday} onClick={() => onHabit(habit.id)} onDelete={() => onDelete('habit', habit.id)} title={habit.name} detail={`Streak: ${habit.streak} day${habit.streak === 1 ? '' : 's'}`} circle />)}</div> : <Empty text="Build a routine that works for you." onAdd={() => onAdd('habit')} label="Add a habit" />}</section><section className="card"><Heading label="THIS MONTH" title="Money" action="+ Add expense" onAction={() => onAdd('expense')} /><div className="money-total"><strong>{currency}{spent.toFixed(2)}</strong><span>tracked so far</span></div>{expenses.length ? <div className="expense-list">{expenses.slice(0, 3).map((expense) => <div className="expense" key={expense.id}><span className="expense-icon"><Icon name="wallet" /></span><span><b>{expense.title}</b><small>{expense.category} · {expense.date}</small></span><strong>{currency}{expense.amount.toFixed(2)}</strong></div>)}</div> : <Empty text="Track your first expense." onAdd={() => onAdd('expense')} label="Add expense" />}<button className="view-all" onClick={() => onNavigate('Money')}>View money <span>→</span></button></section><section className="card focus-card"><p className="eyebrow">YOUR WORKSPACE</p><h2>Everything here belongs to OG.</h2><p className="subtitle">No accounts, no tracking, no shared data. Your information stays on this device.</p></section></div></div>
+  return <div className="page"><section className="welcome"><div><p className="eyebrow">{dateLabel}</p><h1>Good morning, {name}</h1><p className="subtitle">Your private workspace for making today count.</p></div><div className="progress-ring" style={{ background: `conic-gradient(#000 0 ${tasks.length ? completed / tasks.length * 100 : 0}%, #e5e5e5 0)` }}><div><strong>{tasks.length ? Math.round(completed / tasks.length * 100) : 0}%</strong><small>day done</small></div></div></section><section className="command-card"><div><h2>Tell OG what to do</h2></div><div className="command-input"><input value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onCommand() }} placeholder="What should I organize?" /><button onClick={onCommand}>Run</button></div></section><div className="dashboard-grid"><section className="card"><Heading label="YOUR DAY" title={`Tasks ${completed}/${tasks.length}`} action="+ Add task" onAction={() => onAdd('task')} />{tasks.length ? <div className="task-list">{tasks.slice(0, 5).map((task) => <Row key={task.id} done={task.done} onClick={() => onTask(task.id)} onDelete={() => onDelete('task', task.id)} title={task.title} detail={`${task.due}${task.recurrence ? ` · ${task.recurrence}` : ''} · ${task.tag}`} />)}</div> : <Empty text="No tasks yet. Add the first one." onAdd={() => onAdd('task')} label="Add a task" />}<button className="view-all" onClick={() => onNavigate('Tasks')}>View all tasks <span>→</span></button></section><section className="card"><Heading label="KEEP GOING" title={`Habits ${habits.filter((habit) => habit.completedToday).length}/${habits.length}`} action="+ Add habit" onAction={() => onAdd('habit')} />{habits.length ? <div className="habit-list">{habits.slice(0, 5).map((habit) => <Row key={habit.id} done={habit.completedToday} onClick={() => onHabit(habit.id)} onDelete={() => onDelete('habit', habit.id)} title={habit.name} detail={`Streak: ${habit.streak} day${habit.streak === 1 ? '' : 's'}`} circle />)}</div> : <Empty text="Build a routine that works for you." onAdd={() => onAdd('habit')} label="Add a habit" />}</section><section className="card"><Heading label="THIS MONTH" title="Money" action="+ Add expense" onAction={() => onAdd('expense')} /><div className="money-total"><strong>{currency}{spent.toFixed(2)}</strong><span>tracked so far</span></div>{expenses.length ? <div className="expense-list">{expenses.slice(0, 3).map((expense) => <div className="expense" key={expense.id}><span className="expense-icon"><Icon name="wallet" /></span><span><b>{expense.title}</b><small>{expense.category} · {expense.date}</small></span><strong>{currency}{expense.amount.toFixed(2)}</strong></div>)}</div> : <Empty text="Track your first expense." onAdd={() => onAdd('expense')} label="Add expense" />}<button className="view-all" onClick={() => onNavigate('Money')}>View money <span>→</span></button></section><section className="card focus-card"><p className="eyebrow">YOUR WORKSPACE</p><h2>Everything here belongs to OG.</h2><p className="subtitle">No accounts, no tracking, no shared data. Your information stays on this device.</p></section></div></div>
 }
 
 function Section({ active, tasks, habits, expenses, notes, goals, currency, onAdd, onTask, onHabit, onGoal, onDelete }: { active: string; tasks: Task[]; habits: Habit[]; expenses: Expense[]; notes: Note[]; goals: Goal[]; currency: string; onAdd: (type: string) => void; onTask: (id: number) => void; onHabit: (id: number) => void; onGoal: (id: number, current: number) => void; onDelete: (type: string, id: number) => void }) {

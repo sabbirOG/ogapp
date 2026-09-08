@@ -4,6 +4,19 @@ self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
+self.addEventListener('push', event => {
+  const payload = event.data?.json() ?? { title: 'OGApp reminder', body: 'You have an OGApp reminder.' }
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'OGApp reminder', {
+      body: payload.body || '',
+      icon: '/ogapp-icon.svg',
+      badge: '/ogapp-icon.svg',
+      tag: payload.tag || 'ogapp-reminder',
+      data: { url: payload.url || '/' },
+    }),
+  )
+})
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
