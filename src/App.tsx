@@ -66,7 +66,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [form, setForm] = useState<string | null>(null)
   const [command, setCommand] = useState('')
-  const [notifications, setNotifications] = useState(Notification.permission === 'granted')
+  const [notifications, setNotifications] = useState(() => 'Notification' in window && Notification.permission === 'granted')
   const reminded = useRef(new Set<number>())
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2400) }
@@ -77,6 +77,16 @@ function App() {
   const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())
   const filteredTasks = useMemo(() => search ? tasks.filter((task) => `${task.title} ${task.tag}`.toLowerCase().includes(search.toLowerCase())) : tasks, [tasks, search])
   useEffect(() => {
+    const syncPermission = () => setNotifications('Notification' in window && Notification.permission === 'granted')
+    window.addEventListener('focus', syncPermission)
+    document.addEventListener('visibilitychange', syncPermission)
+    return () => {
+      window.removeEventListener('focus', syncPermission)
+      document.removeEventListener('visibilitychange', syncPermission)
+    }
+  }, [])
+
+  useEffect(() => {
     const checkReminders = () => {
       if (!('Notification' in window) || Notification.permission !== 'granted') return
       const now = new Date()
@@ -84,7 +94,21 @@ function App() {
       tasks.forEach((task) => {
         const time = task.due.match(/\b([01]\d|2[0-3]):([0-5]\d)\b/)?.[0]
         if (!task.done && time === current && !reminded.current.has(task.id)) {
-          new Notification('OGApp reminder', { body: task.title })
+          const showReminder = async () => {
+            const registration = await navigator.serviceWorker?.ready
+            if (registration) {
+              await registration.showNotification('OGApp reminder', {
+                body: task.title,
+                icon: '/icon-192.svg',
+                badge: '/icon-192.svg',
+                tag: `task-${task.id}`,
+                data: { url: `${window.location.origin}/` },
+              })
+            } else {
+              new Notification('OGApp reminder', { body: task.title, tag: `task-${task.id}` })
+            }
+          }
+          void showReminder()
           reminded.current.add(task.id)
         }
       })
