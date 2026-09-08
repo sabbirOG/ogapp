@@ -44,3 +44,8 @@
 .modal-form input:focus,.modal-form textarea:focus,.modal-form select:focus{border-color:#000}
 .settings-actions button{background:#f2f2f2;color:#111}
 .settings-actions .danger-button{color:#555;background:#f2f2f2}
+.icon{display:block;width:16px;height:16px}
+.nav-icon{display:grid;place-items:center}
+.expense-icon .icon,.goal-icon .icon{width:15px;height:15px}
+.bottom-nav-item span{display:grid;place-items:center}
+.bottom-nav-item .icon{width:14px;height:14px}
