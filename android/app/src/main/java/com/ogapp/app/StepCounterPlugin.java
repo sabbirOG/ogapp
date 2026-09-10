@@ -3,6 +3,8 @@ package com.ogapp.app;
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
@@ -10,6 +12,7 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Build;
+import android.content.Intent;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -29,7 +32,8 @@ import java.util.Locale;
 @CapacitorPlugin(
     name = "StepCounter",
     permissions = {
-        @Permission(alias = "activity", strings = { Manifest.permission.ACTIVITY_RECOGNITION, Manifest.permission.POST_NOTIFICATIONS })
+        @Permission(alias = "activity", strings = { Manifest.permission.ACTIVITY_RECOGNITION }),
+        @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS })
     }
 )
 public class StepCounterPlugin extends Plugin implements SensorEventListener {
@@ -63,6 +67,53 @@ public class StepCounterPlugin extends Plugin implements SensorEventListener {
         } else {
             requestPermissionForAlias("activity", call, "permissionCallback");
         }
+    }
+
+    @PluginMethod
+    public void requestNotificationPermission(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            call.resolve(new JSObject().put("granted", true));
+            return;
+        }
+        if (hasNotificationPermission()) {
+            call.resolve(new JSObject().put("granted", true));
+        } else {
+            requestPermissionForAlias("notifications", call, "notificationPermissionCallback");
+        }
+    }
+
+    @PluginMethod
+    public void getNotificationStatus(PluginCall call) {
+        call.resolve(new JSObject().put("granted", hasNotificationPermission()));
+    }
+
+    @PermissionCallback
+    private void notificationPermissionCallback(PluginCall call) {
+        call.resolve(new JSObject().put("granted", hasNotificationPermission()));
+    }
+
+    @PluginMethod
+    public void scheduleDailyReport(PluginCall call) {
+        int hour = Math.max(0, Math.min(23, call.getInt("hour", 23)));
+        int minute = Math.max(0, Math.min(59, call.getInt("minute", 0)));
+        String name = call.getString("name", "");
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        prefs.edit().putString("reportName", name).apply();
+        android.app.AlarmManager alarmManager = (android.app.AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager == null) {
+            call.reject("Android alarm service is unavailable");
+            return;
+        }
+        Intent intent = new Intent(getContext(), DailyReportReceiver.class);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(getContext(), 2300, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        java.util.Calendar trigger = java.util.Calendar.getInstance();
+        trigger.set(java.util.Calendar.HOUR_OF_DAY, hour);
+        trigger.set(java.util.Calendar.MINUTE, minute);
+        trigger.set(java.util.Calendar.SECOND, 0);
+        trigger.set(java.util.Calendar.MILLISECOND, 0);
+        if (trigger.getTimeInMillis() <= System.currentTimeMillis()) trigger.add(java.util.Calendar.DAY_OF_YEAR, 1);
+        alarmManager.setInexactRepeating(android.app.AlarmManager.RTC_WAKEUP, trigger.getTimeInMillis(), android.app.AlarmManager.INTERVAL_DAY, pendingIntent);
+        call.resolve(new JSObject().put("scheduled", true).put("hour", hour).put("minute", minute));
     }
 
     @PermissionCallback
@@ -118,9 +169,12 @@ public class StepCounterPlugin extends Plugin implements SensorEventListener {
     private boolean hasPermission() {
         boolean activityGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
             || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED;
-        boolean notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+        return activityGranted;
+    }
+
+    private boolean hasNotificationPermission() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
             || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
-        return activityGranted && notificationsGranted;
     }
 
     private String today() {
@@ -157,5 +211,25 @@ public class StepCounterPlugin extends Plugin implements SensorEventListener {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT);
         manager.notify(1001, builder.build());
+    }
+
+    public static class DailyReportReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager == null || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)) return;
+            String name = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("reportName", "");
+            Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+            PendingIntent launchPendingIntent = launchIntent == null ? null : PendingIntent.getActivity(context, 2301, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(name.isEmpty() ? "Your OGApp daily report" : "Daily report for " + name)
+                .setContentText("Your report is ready. Open OGApp to review today and keep your data private.")
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+            if (launchPendingIntent != null) builder.setContentIntent(launchPendingIntent);
+            manager.notify(2300, builder.build());
+        }
     }
 }

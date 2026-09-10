@@ -13,6 +13,9 @@ export type StepCounterStatus = {
 export interface StepCounterPlugin {
   getStatus(): Promise<StepCounterStatus>
   requestPermission(): Promise<{ granted: boolean }>
+  requestNotificationPermission(): Promise<{ granted: boolean }>
+  getNotificationStatus(): Promise<{ granted: boolean }>
+  scheduleDailyReport(options?: { hour?: number; minute?: number; name?: string }): Promise<{ scheduled: boolean }>
   startTracking(options?: { goal?: number }): Promise<StepCounterStatus>
   stopTracking(): Promise<void>
   addListener(eventName: 'stepsChanged', listenerFunc: (status: StepCounterStatus) => void): Promise<PluginListenerHandle>
@@ -22,6 +25,9 @@ export const StepCounter = registerPlugin<StepCounterPlugin>('StepCounter', {
   web: () => ({
     getStatus: async () => ({ available: false, authorized: false, steps: 0, date: '', goal: 10000, tracking: false }),
     requestPermission: async () => ({ granted: false }),
+    requestNotificationPermission: async () => ({ granted: false }),
+    getNotificationStatus: async () => ({ granted: false }),
+    scheduleDailyReport: async () => ({ scheduled: false }),
     startTracking: async () => ({ available: false, authorized: false, steps: 0, date: '', goal: 10000, tracking: false }),
     stopTracking: async () => undefined,
     addListener: async () => ({ remove: async () => undefined }),

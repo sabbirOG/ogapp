@@ -204,6 +204,7 @@ function App() {
     return () => controller.abort()
   }, [today])
   useEffect(() => {
+    void StepCounter.getNotificationStatus().then((status) => setNotifications(status.granted)).catch(() => undefined)
     const syncPermission = () => setNotifications('Notification' in window && Notification.permission === 'granted')
     window.addEventListener('focus', syncPermission)
     document.addEventListener('visibilitychange', syncPermission)
@@ -212,6 +213,10 @@ function App() {
       document.removeEventListener('visibilitychange', syncPermission)
     }
   }, [])
+
+  useEffect(() => {
+    void StepCounter.scheduleDailyReport({ hour: 23, minute: 0, name: notificationName }).catch(() => undefined)
+  }, [notificationName])
 
   useEffect(() => {
     const showUpdate = () => setUpdateAvailable(true)
@@ -398,6 +403,13 @@ function App() {
     notify('Command completed')
   }
   const enableNotifications = async () => {
+    const nativePermission = await StepCounter.requestNotificationPermission().catch(() => ({ granted: false }))
+    if (nativePermission.granted) {
+      setNotifications(true)
+      await StepCounter.scheduleDailyReport({ hour: 23, minute: 0, name: notificationName }).catch(() => undefined)
+      notify('Daily reports enabled')
+      return
+    }
     if (!('Notification' in window)) { notify('Notifications are not supported in this browser'); return }
     const permission = await Notification.requestPermission()
     setNotifications(permission === 'granted')
@@ -431,7 +443,7 @@ function App() {
       {active === 'Today' ? <Today tasks={filteredTasks} habits={habits} expenses={expenses} walking={walking} onEnableWalking={enableWalking} notifications={notifications} onEnableNotifications={enableNotifications} completed={completed} spent={spent} currency={currency} name={displayName} dateLabel={dateLabel} clockLabel={clockLabel} prayers={prayers} prayerError={prayerError} formatPrayerTime={formatPrayerTime} command={command} setCommand={setCommand} onCommand={runCommand} onTask={(id) => setTasks(tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task))} onHabit={(id) => setHabits(habits.map((habit) => habit.id === id ? { ...habit, completedPeriod: habitIsComplete(habit) ? '' : habitPeriodKey(new Date(), habit.period || 'daily'), completedToday: !habitIsComplete(habit) } : habit))} onAdd={(type) => setForm(type)} onNavigate={setActive} onDelete={remove} /> : <Section active={active} tasks={filteredTasks} habits={habits} expenses={expenses} notes={notes} goals={goals} reports={reports} currency={currency} onAdd={(type) => setForm(type)} onTask={(id) => setTasks(tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task))} onHabit={(id) => setHabits(habits.map((habit) => habit.id === id ? { ...habit, completedPeriod: habitIsComplete(habit) ? '' : habitPeriodKey(new Date(), habit.period || 'daily'), completedToday: !habitIsComplete(habit) } : habit))} onGoal={(id, current) => setGoals(goals.map((goal) => goal.id === id ? { ...goal, current } : goal))} onDelete={remove} />}
     </main>
     {form && <Modal title={`Add ${form}`} onClose={() => setForm(null)}>{form === 'task' && <ItemForm onSubmit={addTask} fields={[['title', 'Task title', 'text'], ['due', 'When? (e.g. 9:00 AM)', 'text'], ['recurrence', 'Repeat: daily, weekly, or blank', 'text'], ['tag', 'Category', 'text']]} />}{form === 'habit' && <ItemForm onSubmit={addHabit} fields={[['name', 'Habit name', 'text'], ['period', 'Track this habit', 'select']]} />}{form === 'expense' && <ItemForm onSubmit={addExpense} fields={[['title', 'What did you spend on?', 'text'], ['amount', 'Amount', 'number'], ['category', 'Category', 'text'], ['date', 'Date', 'date']]} />}{form === 'note' && <ItemForm onSubmit={addNote} fields={[['title', 'Note title', 'text'], ['body', 'Write your note...', 'textarea'], ['color', 'Color: yellow, pink, or blue', 'text']]} />}{form === 'goal' && <ItemForm onSubmit={addGoal} fields={[['title', 'Goal title', 'text'], ['description', 'Why does it matter?', 'textarea'], ['target', 'Number of milestones', 'number'], ['deadline', 'Target date', 'date']]} />}</Modal>}
-    {showSettings && <Modal title="Settings" onClose={() => setShowSettings(false)}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); setSettings({ name: String(data.get('name') || ''), currency: String(data.get('currency') || 'USD'), timeFormat: String(data.get('timeFormat') || '12h') as '12h' | '24h' }); setShowSettings(false); notify('Settings saved') }}><label>Your name<input name="name" defaultValue={settings.name} placeholder="How should OG greet you?" /></label><label>Currency<select name="currency" defaultValue={settings.currency}><option value="USD">USD ($)</option><option value="BDT">BDT (৳)</option><option value="EUR">EUR (€)</option><option value="GBP">GBP (£)</option></select></label><fieldset className="format-field"><legend>Time format</legend><div className="format-options"><label><input type="radio" name="timeFormat" value="12h" defaultChecked={(settings.timeFormat || '12h') === '12h'} />12-hour <span>1:15 PM</span></label><label><input type="radio" name="timeFormat" value="24h" defaultChecked={settings.timeFormat === '24h'} />24-hour <span>13:15</span></label></div></fieldset><button className="primary-button">Save settings</button></form><div className="settings-actions"><button onClick={enableNotifications}>{notifications ? 'Notifications enabled' : 'Enable notifications'}</button><button onClick={exportData}>Export my data</button><button className="danger-button" onClick={resetData}>Delete all data</button></div><p className="settings-note">Daily reports are generated at 11:00 PM while OGApp is open. Closed-app delivery requires a hosted push service.</p></Modal>}
+    {showSettings && <Modal title="Settings" onClose={() => setShowSettings(false)}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); setSettings({ name: String(data.get('name') || ''), currency: String(data.get('currency') || 'USD'), timeFormat: String(data.get('timeFormat') || '12h') as '12h' | '24h' }); setShowSettings(false); notify('Settings saved') }}><label>Your name<input name="name" defaultValue={settings.name} placeholder="How should OG greet you?" /></label><label>Currency<select name="currency" defaultValue={settings.currency}><option value="USD">USD ($)</option><option value="BDT">BDT (৳)</option><option value="EUR">EUR (€)</option><option value="GBP">GBP (£)</option></select></label><fieldset className="format-field"><legend>Time format</legend><div className="format-options"><label><input type="radio" name="timeFormat" value="12h" defaultChecked={(settings.timeFormat || '12h') === '12h'} />12-hour <span>1:15 PM</span></label><label><input type="radio" name="timeFormat" value="24h" defaultChecked={settings.timeFormat === '24h'} />24-hour <span>13:15</span></label></div></fieldset><button className="primary-button">Save settings</button></form><div className="settings-actions"><button onClick={enableNotifications}>{notifications ? 'Notifications enabled' : 'Enable notifications'}</button><button onClick={exportData}>Export my data</button><button className="danger-button" onClick={resetData}>Delete all data</button></div><p className="settings-note">Daily reports are generated at 11:00 PM. Android schedules the notification locally, even when OGApp is closed.</p></Modal>}
     <BottomNav active={active} onChange={setActive} />
     {toast && <div className="toast">{toast}</div>}
   </div>

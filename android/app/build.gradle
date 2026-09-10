@@ -16,10 +16,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (System.getenv("OGAPP_KEYSTORE")) {
+                storeFile file(System.getenv("OGAPP_KEYSTORE"))
+                storePassword System.getenv("OGAPP_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("OGAPP_KEY_ALIAS")
+                keyPassword System.getenv("OGAPP_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (System.getenv("OGAPP_KEYSTORE")) signingConfig signingConfigs.release
         }
     }
 }
