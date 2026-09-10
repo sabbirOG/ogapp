@@ -75,7 +75,7 @@ function useStored<T>(key: string, initial: T) {
     const request = indexedDB.open('my-life-db-v2', 1)
     request.onsuccess = () => request.result.transaction('data', 'readwrite').objectStore('data').put(value, key)
   }, [key, value, ready])
-  return [value, setValue] as const
+  return [value, setValue, ready] as const
 }
 
 function reminderDate(due: string, now: Date) {
@@ -127,7 +127,7 @@ function App() {
   const [notes, setNotes] = useStored<Note[]>('notes', empty.notes)
   const [goals, setGoals] = useStored<Goal[]>('goals', empty.goals)
   const [reports, setReports] = useStored<DailyReport[]>('reports', empty.reports)
-  const [settings, setSettings] = useStored<Settings>('settings', empty.settings)
+  const [settings, setSettings, settingsReady] = useStored<Settings>('settings', empty.settings)
   const [toast, setToast] = useState('')
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
@@ -140,10 +140,14 @@ function App() {
   const [prayers, setPrayers] = useState<PrayerSchedule | null>(null)
   const [prayerError, setPrayerError] = useState('')
   const [walking, setWalking] = useState<StepCounterStatus | null>(null)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const reminded = useRef(new Set<string>())
   const reported = useRef(new Set<string>())
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2400) }
+  useEffect(() => {
+    if (settingsReady && !settings.name.trim()) setShowOnboarding(true)
+  }, [settings.name, settingsReady])
   useEffect(() => {
     let mounted = true
     void StepCounter.getStatus().then((status) => {
@@ -454,6 +458,7 @@ function App() {
     </main>
     {form && <Modal title={`Add ${form}`} onClose={() => setForm(null)}>{form === 'task' && <ItemForm onSubmit={addTask} fields={[['title', 'Task title', 'text'], ['due', 'When? (e.g. 9:00 AM)', 'text'], ['recurrence', 'Repeat: daily, weekly, or blank', 'text'], ['tag', 'Category', 'text']]} />}{form === 'habit' && <ItemForm onSubmit={addHabit} fields={[['name', 'Habit name', 'text'], ['period', 'Track this habit', 'select']]} />}{form === 'expense' && <ItemForm onSubmit={addExpense} fields={[['title', 'What did you spend on?', 'text'], ['amount', 'Amount', 'number'], ['category', 'Category', 'text'], ['date', 'Date', 'date']]} />}{form === 'note' && <ItemForm onSubmit={addNote} fields={[['title', 'Note title', 'text'], ['body', 'Write your note...', 'textarea'], ['color', 'Color: yellow, pink, or blue', 'text']]} />}{form === 'goal' && <ItemForm onSubmit={addGoal} fields={[['title', 'Goal title', 'text'], ['description', 'Why does it matter?', 'textarea'], ['target', 'Number of milestones', 'number'], ['deadline', 'Target date', 'date']]} />}</Modal>}
     {showSettings && <Modal title="Settings" onClose={() => setShowSettings(false)}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); setSettings({ name: String(data.get('name') || ''), currency: String(data.get('currency') || 'USD'), timeFormat: String(data.get('timeFormat') || '12h') as '12h' | '24h' }); setShowSettings(false); notify('Settings saved') }}><label>Your name<input name="name" defaultValue={settings.name} placeholder="How should OG greet you?" /></label><label>Currency<select name="currency" defaultValue={settings.currency}><option value="USD">USD ($)</option><option value="BDT">BDT (৳)</option><option value="EUR">EUR (€)</option><option value="GBP">GBP (£)</option></select></label><fieldset className="format-field"><legend>Time format</legend><div className="format-options"><label><input type="radio" name="timeFormat" value="12h" defaultChecked={(settings.timeFormat || '12h') === '12h'} />12-hour <span>1:15 PM</span></label><label><input type="radio" name="timeFormat" value="24h" defaultChecked={settings.timeFormat === '24h'} />24-hour <span>13:15</span></label></div></fieldset><button className="primary-button">Save settings</button></form><div className="settings-actions"><button onClick={enableNotifications}>{notifications ? 'Notifications enabled' : 'Enable notifications'}</button><button onClick={exportData}>Export my data</button><button className="danger-button" onClick={resetData}>Delete all data</button></div><p className="settings-note">Daily reports are generated at 11:00 PM. Android schedules the notification locally, even when OGApp is closed.</p></Modal>}
+    {showOnboarding && <Modal title="Make OGApp yours" onClose={() => undefined}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); const name = String(data.get('name') || '').trim(); if (!name) return; setSettings({ ...settings, name }); setShowOnboarding(false); notify(`Welcome, ${name}`) }}><p className="onboarding-copy">Choose the name OGApp should use for your greetings, daily reports, and reminders. Your name stays on this device.</p><label>Your name<input autoFocus required name="name" placeholder="e.g. Sabbir" /></label><button className="primary-button">Start my workspace</button></form></Modal>}
     <BottomNav active={active} onChange={setActive} />
     {toast && <div className="toast">{toast}</div>}
   </div>
